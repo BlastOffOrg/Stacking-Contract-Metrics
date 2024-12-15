@@ -40,8 +40,12 @@ async function main() {
         
         // Reward Distribution
         console.log('\n💰 Reward Distribution');
-        console.log(`   Per Block: ${rewardMetrics.rewardsPerBlock} tokens`);
-        console.log(`   Per Day: ${rewardMetrics.rewardsPerDay} tokens`);
+        console.log(`   Per Second: ${rewardMetrics.formatted.rewardsPerSecond} tokens`);
+        console.log(`   └─ Raw Wei: ${rewardMetrics.rewardsPerSecond.toString()} wei`);
+        console.log(`   Per Block (~12s): ${rewardMetrics.formatted.rewardsPerBlock} tokens`);
+        console.log(`   └─ Raw Wei: ${rewardMetrics.rewardsPerBlock.toString()} wei`);
+        console.log(`   Per Day: ${rewardMetrics.formatted.rewardsPerDay} tokens`);
+        console.log(`   └─ Raw Wei: ${rewardMetrics.rewardsPerDay.toString()} wei`);
         
         // Emission Timeline
         console.log('\n⏳ Emission Schedule');

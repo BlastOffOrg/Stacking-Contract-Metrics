@@ -1,4 +1,4 @@
-import { createPublicClient, http, type PublicClient } from 'viem'
+import { createPublicClient, formatEther, http, type PublicClient } from 'viem'
 import { mainnet } from 'viem/chains'
 import { config } from '../config'
 import { stakingAbi, erc20Abi } from './abis'
@@ -104,16 +104,22 @@ export class StakingContract {
             functionName: 'decimals'
         });
 
-        const rewardsPerBlock = rewardRate * 12n;
-        const rewardsPerDay = rewardRate * 86400n;
+        // All calculations must stay as BigInt
+        const rewardsPerSecond = rewardRate;                // Base rate
+        const rewardsPerBlock = rewardRate * 12n;           // × 12 seconds
+        const rewardsPerDay = rewardRate * 86400n;          // × 86400 seconds
 
-        const divisor = 10n ** BigInt(decimals);
-
+        // We return BOTH the raw BigInt values AND the formatted values
         return {
-            rewardsPerBlock: Number(rewardsPerBlock) / Number(divisor),
-            rewardsPerDay: Number(rewardsPerDay) / Number(divisor),
-            rewardRateRaw: rewardRate,
-            decimals
+            rewardsPerSecond,      // Raw BigInt for calculations
+            rewardsPerBlock,       // Raw BigInt for calculations
+            rewardsPerDay,         // Raw BigInt for calculations
+            formatted: {
+                rewardsPerSecond: formatEther(rewardsPerSecond),
+                rewardsPerBlock: formatEther(rewardsPerBlock),
+                rewardsPerDay: formatEther(rewardsPerDay)
+            },
+            decimals               // Original token decimals
         };
     }
 
