@@ -4,7 +4,7 @@ import { Address } from 'viem';
 
 dotenv.config();
 
-if (!process.env.RPC_URL || !process.env.CONTRACT_ADDRESS || !process.env.EXPLORER_URL) {
+if (!process.env.RPC_URL || !process.env.CONTRACT_ADDRESS || !process.env.EXPLORER_URL || !process.env.DEPLOY_BLOCK) {
     throw new Error('Required environment variables are not set!');
 }
 
@@ -26,7 +26,8 @@ export const config = {
     explorerUrl: process.env.EXPLORER_URL.endsWith('/') 
         ? process.env.EXPLORER_URL 
         : `${process.env.EXPLORER_URL}/`,
-    blockCountdownUrl: `${process.env.EXPLORER_URL}block/countdown/`
+    blockCountdownUrl: `${process.env.EXPLORER_URL}block/countdown/`,
+    deployBlock: process.env.DEPLOY_BLOCK as string,
 } as const;
 
 
