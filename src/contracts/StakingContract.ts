@@ -129,71 +129,111 @@ export class StakingContract {
         };
     }
 
-    async getTokenTransferHistory() {
-        const tokenAddress = await this.client.readContract({
-            address: config.contractAddress,
-            abi: stakingAbi,
-            functionName: 'basicToken'
-        });
+async getTokenTransferHistory() {
+    const tokenAddress = await this.client.readContract({
+        address: config.contractAddress,
+        abi: stakingAbi,
+        functionName: 'basicToken'
+    });
 
-        const currentBlock = await this.client.getBlockNumber();
-        const startBlock = BigInt(config.deployBlock);
+    const currentBlock = await this.client.getBlockNumber();
+    const startBlock = BigInt(config.deployBlock);
 
-        // The two great queries of knowledge!
-        const [allTransfers, allStakeEvents] = await Promise.all([
-            // First query: ALL transfers to our contract
-            this.client.getLogs({
-                address: tokenAddress,
-                event: transferEventAbi[0],
-                args: {
-                    to: config.contractAddress
-                },
-                fromBlock: startBlock,
-                toBlock: currentBlock
-            }),
-            // Second query: ALL stake events
-            this.client.getLogs({
-                address: config.contractAddress,
-                event: {
-                    // Define the full event signature
-                    name: 'Staked',
-                    type: 'event',
-                    inputs: [
-                        { name: 'user', type: 'address', indexed: true },
-                        { name: 'amount', type: 'uint256' }
-                    ]
-                },
-                fromBlock: startBlock,
-                toBlock: currentBlock
-            })
-        ]);
+    // Configuration constants
+    const INITIAL_BATCH_SIZE = 200000n;
+    const MIN_BATCH_SIZE = 100n;
+    const BATCH_DELAY_MS = 1000;
+    
+    // Mutable batch size that can be adjusted
+    let currentBatchSize = INITIAL_BATCH_SIZE;
 
-        // Create our set of staking transaction hashes
-        const stakingTxHashes = new Set(
-            allStakeEvents.map(log => log.transactionHash)
-        );
+    const allTransfers: any[] = [];
+    const allStakeEvents: any[] = [];
 
-        // Filter out transfers that were part of staking transactions
-        const directTransfers = allTransfers.filter(log => 
-            !stakingTxHashes.has(log.transactionHash)
-        );
+    // Process in smaller chunks
+    let fromBlock = startBlock;
+    while (fromBlock < currentBlock) {
+        const toBlock = (fromBlock + currentBatchSize) > currentBlock 
+            ? currentBlock 
+            : fromBlock + currentBatchSize;
+        
+        console.log(`Processing blocks ${fromBlock} to ${toBlock}... (Batch size: ${currentBatchSize})`);
 
-        // Calculate total transferred amount
-        const totalTransferred = directTransfers.reduce(
-            (sum, log) => sum + (log.args.value ?? 0n),
-            0n
-        );
+        try {
+            const [batchTransfers, batchStakeEvents] = await Promise.all([
+                this.client.getLogs({
+                    address: tokenAddress,
+                    event: transferEventAbi[0],
+                    args: { to: config.contractAddress },
+                    fromBlock,
+                    toBlock
+                }),
+                this.client.getLogs({
+                    address: config.contractAddress,
+                    event: {
+                        name: 'Staked',
+                        type: 'event',
+                        inputs: [
+                            { name: 'user', type: 'address', indexed: true },
+                            { name: 'amount', type: 'uint256' }
+                        ]
+                    },
+                    fromBlock,
+                    toBlock
+                })
+            ]);
 
-        return {
-            totalTransferred,
-            transferCount: directTransfers.length,
-            transfers: directTransfers.map(log => ({
-                from: log.args.from ?? '',
-                amount: log.args.value ?? 0n,
-                blockNumber: log.blockNumber
-            } as TransferEvent))
-        };
+            // Successfully processed this batch
+            allTransfers.push(...batchTransfers);
+            allStakeEvents.push(...batchStakeEvents);
+
+            // Move to next block range
+            fromBlock = toBlock + 1n;
+
+            // Add delay between batches to prevent rate limiting
+            await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS));
+
+        } catch (error) {
+            console.warn(`Error processing batch ${fromBlock}-${toBlock}, reducing batch size and retrying...`);
+            
+            // Reduce batch size for retry
+            currentBatchSize = currentBatchSize / 2n;
+            
+            if (currentBatchSize < MIN_BATCH_SIZE) {
+                throw new Error(`Batch size became too small (${currentBatchSize} blocks). Possible RPC issue or rate limiting.`);
+            }
+            
+            // Don't advance fromBlock - we'll retry this range with smaller batch size
+            continue;
+        }
     }
+
+    // Create set of staking transaction hashes
+    const stakingTxHashes = new Set(
+        allStakeEvents.map(log => log.transactionHash)
+    );
+
+    // Filter out transfers that were part of staking transactions
+    const directTransfers = allTransfers.filter(log =>
+        !stakingTxHashes.has(log.transactionHash)
+    );
+
+    // Calculate total transferred amount
+    const totalTransferred = directTransfers.reduce(
+        (sum, log) => sum + (log.args.value ?? 0n),
+        0n
+    );
+
+    return {
+        totalTransferred,
+        transferCount: directTransfers.length,
+        transfers: directTransfers.map(log => ({
+            from: log.args.from ?? '',
+            amount: log.args.value ?? 0n,
+            blockNumber: log.blockNumber
+        } as TransferEvent))
+    };
+}
 
     async calculateRequiredFunding() {
         const [

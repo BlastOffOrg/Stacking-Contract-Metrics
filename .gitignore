@@ -28,7 +28,7 @@ package-lock.json
 # production
 /build
 /dist
-
+.env.eth
 # misc
 .DS_Store
 
