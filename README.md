@@ -1,6 +1,6 @@
 # Staking Contract Metrics
 
-A comprehensive analytics tool for Ethereum staking contracts, providing detailed metrics about rewards distribution, emission schedules, and contract status.
+A comprehensive analytics tool for Blast staking contracts, providing detailed metrics about rewards distribution, emission schedules, and contract status.
 
 ## Features
 
