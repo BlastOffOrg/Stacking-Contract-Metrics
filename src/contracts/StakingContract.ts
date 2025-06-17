@@ -110,11 +110,11 @@ export class StakingContract {
         });
 
         // Per second (base rate)
-        const rewardsPerSecond = rewardRate;
+        const rewardsPerSecond = rewardRate as bigint;
         // Per block (12 sec blocks)
-        const rewardsPerBlock = rewardRate * 12n;
+        const rewardsPerBlock = (rewardRate as bigint) * 12n;
         // Per day 
-        const rewardsPerDay = rewardRate * 86400n;
+        const rewardsPerDay = (rewardRate as bigint) * 86400n;
 
         return {
             rewardsPerSecond,
@@ -138,35 +138,45 @@ export class StakingContract {
 
         const currentBlock = await this.client.getBlockNumber();
         const startBlock = BigInt(config.deployBlock);
-
-        // The two great queries of knowledge!
-        const [allTransfers, allStakeEvents] = await Promise.all([
-            // First query: ALL transfers to our contract
-            this.client.getLogs({
-                address: tokenAddress,
-                event: transferEventAbi[0],
-                args: {
-                    to: config.contractAddress
-                },
-                fromBlock: startBlock,
-                toBlock: currentBlock
-            }),
-            // Second query: ALL stake events
-            this.client.getLogs({
-                address: config.contractAddress,
-                event: {
-                    // Define the full event signature
-                    name: 'Staked',
-                    type: 'event',
-                    inputs: [
-                        { name: 'user', type: 'address', indexed: true },
-                        { name: 'amount', type: 'uint256' }
-                    ]
-                },
-                fromBlock: startBlock,
-                toBlock: currentBlock
-            })
-        ]);
+        
+        // Split queries into chunks of 10,000 blocks to avoid RPC limits
+        const chunkSize = BigInt(10000);
+        const allTransfers: any[] = [];
+        const allStakeEvents: any[] = [];
+        
+        for (let fromBlock = startBlock; fromBlock <= currentBlock; fromBlock += chunkSize) {
+            const toBlock = fromBlock + chunkSize - 1n > currentBlock ? currentBlock : fromBlock + chunkSize - 1n;
+            
+            const [transfers, stakeEvents] = await Promise.all([
+                // Transfer logs for this chunk
+                this.client.getLogs({
+                    address: tokenAddress,
+                    event: transferEventAbi[0],
+                    args: {
+                        to: config.contractAddress as `0x${string}`
+                    },
+                    fromBlock,
+                    toBlock
+                }),
+                // Stake events for this chunk
+                this.client.getLogs({
+                    address: config.contractAddress,
+                    event: {
+                        name: 'Staked',
+                        type: 'event',
+                        inputs: [
+                            { name: 'user', type: 'address', indexed: true },
+                            { name: 'amount', type: 'uint256' }
+                        ]
+                    },
+                    fromBlock,
+                    toBlock
+                })
+            ]);
+            
+            allTransfers.push(...transfers);
+            allStakeEvents.push(...stakeEvents);
+        }
 
         // Create our set of staking transaction hashes
         const stakingTxHashes = new Set(
@@ -262,14 +272,14 @@ export class StakingContract {
         const totalSeconds = BigInt(Number(emissionEnd) - Number(emissionStart));
         
         // Calculate total tokens needed for entire emission period
-        const totalTokensNeeded = rewardRate * totalSeconds;
+        const totalTokensNeeded = (rewardRate as bigint) * totalSeconds;
         
         // Calculate how many more tokens we need based on actual transfers
-        const requiredTokens = totalTokensNeeded > transferHistory.totalTransferred ? 
+        const requiredTokens: bigint = totalTokensNeeded > transferHistory.totalTransferred ? 
             totalTokensNeeded - transferHistory.totalTransferred : 0n;
 
         const currentTime = BigInt(Math.floor(Date.now() / 1000));
-        const timeLeft = Number(emissionEnd - currentTime);
+        const timeLeft = Number((emissionEnd as bigint) - currentTime);
         
         return {
             requiredTokens,
@@ -279,12 +289,11 @@ export class StakingContract {
             totalTransferred: transferHistory.totalTransferred,
             transferCount: transferHistory.transferCount,
             transfers: transferHistory.transfers,
-            currentBalance: contractBalance - totalStaked - feesAccrued, // Still keeping this for reference
+            currentBalance: (contractBalance as bigint) - (totalStaked as bigint) - (feesAccrued as bigint), // Still keeping this for reference
             emissionStart: Number(emissionStart),
             emissionEnd: Number(emissionEnd),
             rewardRate,
             decimals
         };
     }
-
 }

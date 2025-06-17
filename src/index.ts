@@ -25,7 +25,7 @@ async function main() {
         console.log(`   Name: ${tokenInfo.name}`);
         console.log(`   Symbol: ${tokenInfo.symbol}`);
         console.log(`   Token Address: ${createClickableLink(
-            tokenInfo.address,
+            tokenInfo.address as string,
             `${config.explorerUrl}address/${tokenInfo.address}`
         )}`);
         console.log(`   Staking Contract: ${createClickableLink(
@@ -94,7 +94,7 @@ async function main() {
             const emissionStartTime = emissionBlocks.startTime * 1000; // Convert to milliseconds
 
             // Precise calculation of supported duration
-            const supportedSeconds = totalFunded / rewardRatePerSecond;
+            const supportedSeconds = Number(totalFunded) / Number(rewardRatePerSecond);
             
             // Calculate the exact depletion date from the emission start
             const depletionDate = new Date(emissionStartTime);
@@ -117,10 +117,9 @@ async function main() {
         // In your main function
 
         if (metrics.totalTokensNeeded > metrics.totalTransferred) {
-            const requiredTokens = metrics.totalTokensNeeded - metrics.totalTransferred;
             console.log('\n⚠️ Additional Funding Required:');
-            console.log(`   ${formatEther(requiredTokens)} tokens needed`);
-            console.log(`   └─ Raw Wei: ${requiredTokens.toString()} wei`);
+            console.log(`   ${formatEther(metrics.requiredTokens)} tokens needed`);
+            console.log(`   └─ Raw Wei: ${metrics.requiredTokens.toString()} wei`);
         } else {
             console.log('\n✅ Contract is sufficiently funded for the emission period');
         }        
